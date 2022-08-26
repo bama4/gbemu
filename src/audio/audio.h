@@ -12,9 +12,6 @@ public:
     u8 read(const Address &address);
     void write(const Address &address, u8 byte);
 
-private:
-    Gameboy &gb;
-
     /* Registers */
     ByteRegister channel_one_sweep;    /* NR10 */
     ByteRegister channel_one_duty;     /* NR11 */
@@ -41,6 +38,9 @@ private:
     ByteRegister channel_ctrl;    /* NR50 */
     ByteRegister select_terminal; /* NR51 */
     ByteRegister sound_switch;    /* NR52 */
+
+private:
+    Gameboy &gb;
 
     std::vector<u8> audio_ram;
 };
