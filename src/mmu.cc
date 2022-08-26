@@ -151,7 +151,7 @@ auto MMU::read_io(const Address &address) const -> u8 {
     case 0xFF1E:
         return gb.audio.channel_three_freq_hi.value();
     case 0xFF1F:
-        return 0xFF;
+        return unmapped_io_read(address);
 
     /* TODO: Audio - Channel 4: Noise */
     case 0xFF20:
@@ -484,10 +484,20 @@ void MMU::write_io(const Address &address, const u8 byte) {
 
     /* TODO: Audio - Channel 1: Tone & Sweep */
     case 0xFF10:
+        gb.audio.channel_one_sweep.set(byte);
+        return;
+
     case 0xFF11:
+        gb.audio.channel_one_duty.set(byte);
+        return;
     case 0xFF12:
+        gb.audio.channel_one_envelope.set(byte);
+        return;
     case 0xFF13:
+        gb.audio.channel_one_freq_lo.set(byte);
+        return;
     case 0xFF14:
+        gb.audio.channel_one_freq_hi.set(byte);
         return;
 
     case 0xFF15:
@@ -495,41 +505,67 @@ void MMU::write_io(const Address &address, const u8 byte) {
 
     /* TODO: Audio - Channel 2: Tone */
     case 0xFF16:
+        gb.audio.channel_two_duty.set(byte);
+        return;
     case 0xFF17:
+        gb.audio.channel_two_envelope.set(byte);
+        return;
     case 0xFF18:
+        gb.audio.channel_two_freq_lo.set(byte);
+        return;
     case 0xFF19:
+        gb.audio.channel_two_freq_hi.set(byte);
         return;
 
     /* TODO: Audio - Channel 3: Wave Output */
     case 0xFF1A:
+        gb.audio.channel_three_switch.set(byte);
+        return;
     case 0xFF1B:
+        gb.audio.channel_three_length.set(byte);
+        return;
     case 0xFF1C:
+        gb.audio.channel_three_level.set(byte);
+        return;
     case 0xFF1D:
+        gb.audio.channel_three_freq_lo.set(byte);
+        return;
     case 0xFF1E:
+        gb.audio.channel_three_freq_hi.set(byte);
         return;
 
     case 0xFF1F:
         return unmapped_io_write(address, byte);
 
-    /* TODO: Audio - Channel 4: Noise */
+        /* TODO: Audio - Channel 4: Noise */
     case 0xFF20:
+        gb.audio.channel_four_length.set(byte);
+        return;
     case 0xFF21:
+        gb.audio.channel_four_envelope.set(byte);
+        return;
     case 0xFF22:
+        gb.audio.channel_four_poly_ctr.set(byte);
+        return;
     case 0xFF23:
+        gb.audio.channel_four_init.set(byte);
         return;
 
     /* TODO: Audio - Channel control/ON-OFF/Volume */
     case 0xFF24:
+        gb.audio.channel_ctrl.set(byte);
         return;
 
     /* TODO: Audio - Selection of sound output terminal */
     case 0xFF25:
+        gb.audio.select_terminal.set(byte);
         return;
 
     /* TODO: Audio - Sound on/off */
     case 0xFF26:
         log_unimplemented("Wrote to sound on/off address 0x%x - 0x%x",
                           address.value(), byte);
+        gb.audio.sound_switch.set(byte);
         return;
 
     case 0xFF27:
@@ -560,7 +596,7 @@ void MMU::write_io(const Address &address, const u8 byte) {
     case 0xFF3D:
     case 0xFF3E:
     case 0xFF3F:
-        return;
+        gb.audio.write(address - 0xFF30, byte);
 
     /* Switch on LCD */
     case 0xFF40:
