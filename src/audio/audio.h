@@ -49,6 +49,8 @@ private:
     uint env_cycle_ctr = 0;
     uint len_cycle_ctr = 0;
     uint sweep_cycle_ctr = 0;
+
+    void handle_length_ctr(void);
 };
 
 const uint AUDIO_RAM_SIZE = 0xf;
