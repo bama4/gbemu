@@ -15,7 +15,7 @@ enum class TimerInputClkSelectMode {
 class Timer {
 public:
     Timer(Gameboy &inGb);
-    void tick(uint cycles);
+    void tick(Cycles cycles);
 
     auto get_divider() const -> u8;
     auto get_timer() const -> u8;

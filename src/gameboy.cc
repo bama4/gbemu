@@ -49,7 +49,7 @@ void Gameboy::tick() {
     elapsed_cycles += cycles.cycles;
 
     video.tick(cycles);
-    timer.tick(cycles.cycles);
+    timer.tick(cycles);
     audio.tick(cycles);
 }
 

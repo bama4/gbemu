@@ -3,11 +3,11 @@
 
 Timer::Timer(Gameboy &inGb) : gb(inGb) {}
 
-void Timer::tick(uint cycles) {
-    u8 new_divider = static_cast<u8>(divider.value() + cycles);
+void Timer::tick(Cycles cycles) {
+    u8 new_divider = static_cast<u8>(divider.value() + cycles.cycles);
     divider.set(new_divider);
 
-    cycle_counter += cycles;
+    cycle_counter += cycles.cycles;
 
     // Get input clock select bits
     TimerInputClkSelectMode t_timer_clk_sel_mode =
