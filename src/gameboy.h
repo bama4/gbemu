@@ -51,7 +51,9 @@ private:
 
     Input input;
     Serial serial;
+
     Timer timer;
+    friend class Timer;
 
     Debugger debugger;
     friend class Debugger;

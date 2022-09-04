@@ -80,7 +80,7 @@ private:
 
 class RegisterPair : public WordValue {
 public:
-    RegisterPair(ByteRegister& high, ByteRegister& low);
+    RegisterPair(ByteRegister &high, ByteRegister &low);
 
     void set(u16 word) override;
 
@@ -93,6 +93,6 @@ public:
     void decrement();
 
 private:
-    ByteRegister& low_byte;
-    ByteRegister& high_byte;
+    ByteRegister &low_byte;
+    ByteRegister &high_byte;
 };

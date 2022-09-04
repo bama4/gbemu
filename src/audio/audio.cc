@@ -2,6 +2,11 @@
 #include "../address.h"
 #include "../gameboy.h"
 
+#include "../util/bitwise.h"
+#include "../util/log.h"
+
+using bitwise::check_bit;
+
 Audio::Audio(Gameboy &inGb) : gb(inGb) {
     audio_ram = std::vector<u8>(AUDIO_RAM_SIZE);
 }
