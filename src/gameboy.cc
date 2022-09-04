@@ -50,6 +50,7 @@ void Gameboy::tick() {
 
     video.tick(cycles);
     timer.tick(cycles.cycles);
+    audio.tick(cycles);
 }
 
 auto Gameboy::get_cartridge_ram() const -> const std::vector<u8> & {
