@@ -9,27 +9,40 @@ using bitwise::check_bit;
 
 Audio::Audio(Gameboy &inGb) : gb(inGb) {
     audio_ram = std::vector<u8>(AUDIO_RAM_SIZE);
+
+    /* Channel 1 period */
+    square_one_cycle_timer_period = (2048 - AUDIO_SWEEP_RATE) * 4;
 }
 
 void Audio::tick(Cycles cycles) {
 
-    frame_seq_cycle_ctr += cycles.cycles;
-    env_cycle_ctr += cycles.cycles;
-    len_cycle_ctr += cycles.cycles;
-    sweep_cycle_ctr += cycles.cycles;
+    frame_seq_cycle_timer += cycles.cycles;
+    vol_env_cycle_timer += cycles.cycles;
+    len_cycle_timer += cycles.cycles;
+    square_one_cycle_timer += cycles.cycles;
+
+    /* Did frame sequencer clock? */
+    if (frame_seq_cycle_timer >= AUDIO_FRAME_SEQUENCER_CYCLES) {
+        frame_seq_cycle_timer =
+            frame_seq_cycle_timer % AUDIO_FRAME_SEQUENCER_CYCLES;
+        frame_seq_ctr++;
+    }
 
     /* Did volume envelope timer clock? */
-    if (env_cycle_ctr >= AUDIO_VOL_ENVELOPE_CYCLES) {
-        env_cycle_ctr = env_cycle_ctr % AUDIO_VOL_ENVELOPE_CYCLES;
+    if (vol_env_cycle_timer >= AUDIO_VOL_ENVELOPE_CYCLES) {
+        vol_env_cycle_timer = vol_env_cycle_timer % AUDIO_VOL_ENVELOPE_CYCLES;
 
-        // Decrement volume envelope
-        // If zero, increase/decrease volume dependng on mode
+        // Do nothing if envelope period is 0
+        // Do nothing except decrement envelop period timer if decrement does
+        // not result in 0, else:
+        // Increase/decrease volume dependng on mode
         // If new volume is not between 0 and 15 ignore and disable volume env
+        handle_vol_env_ctr();
     }
 
     /* Did sweep timer clock? */
-    if (sweep_cycle_ctr >= AUDIO_SWEEP_CYCLES) {
-        sweep_cycle_ctr = sweep_cycle_ctr % AUDIO_SWEEP_CYCLES;
+    if (square_one_cycle_timer >= AUDIO_SWEEP_CYCLES) {
+        square_one_cycle_timer = square_one_cycle_timer % AUDIO_SWEEP_CYCLES;
 
         // Decrement
         // When ctr is zero, shifts left or right depending on mode
@@ -38,16 +51,16 @@ void Audio::tick(Cycles cycles) {
     }
 
     /* Did length counter timer clock? */
-    if (len_cycle_ctr >= AUDIO_LEN_CTR_CYCLES) {
-        len_cycle_ctr = len_cycle_ctr % AUDIO_LEN_CTR_CYCLES;
+    if (len_cycle_timer >= AUDIO_LEN_CTR_CYCLES) {
+        len_cycle_timer = len_cycle_timer % AUDIO_LEN_CTR_CYCLES;
 
         handle_length_ctr();
     }
+    if (frame_seq_ctr == 0) {
+        frame_seq_ctr = 8;
 
-    /* Did frame sequencer clock? */
-    if (frame_seq_cycle_ctr >= AUDIO_FRAME_SEQUENCER_CYCLES) {
-        frame_seq_cycle_ctr =
-            frame_seq_cycle_ctr % AUDIO_FRAME_SEQUENCER_CYCLES;
+    } else if (frame_seq_ctr >= 8) {
+        frame_seq_ctr = 0;
     }
 }
 
@@ -55,6 +68,211 @@ u8 Audio::read(const Address &address) { return audio_ram.at(address.value()); }
 
 void Audio::write(const Address &address, u8 value) {
     audio_ram.at(address.value()) = value;
+}
+
+void Audio::write_io_register(const Address &address, u8 byte) {
+
+    switch (address.value()) {
+
+        /* TODO: Audio - Channel 1: Tone & Sweep */
+    case 0xFF10:
+        channel_one_sweep.set(byte);
+        return;
+
+    case 0xFF11:
+        channel_one_duty.set(byte);
+        return;
+    case 0xFF12:
+        channel_one_envelope.set(byte);
+        return;
+    case 0xFF13:
+        channel_one_freq_lo.set(byte);
+        return;
+    case 0xFF14:
+
+    {
+        bool channel_one_sound_init = channel_one_freq_hi.check_bit(7);
+        channel_one_freq_hi.set(byte);
+
+        /* Check if volume trigger should happen */
+        /* If the init sound bit was flipped to enabled, we need
+         * to adjust the period and period timer for this channel
+         */
+        if ((channel_one_freq_hi.check_bit(7) == true) &&
+            (channel_one_sound_init == false)) {
+            process_init_sound_trigger(&channel_one_envelope,
+                                       &channel_one_vol_env_period_timer);
+        }
+
+        process_channel_1_trigger();
+    }
+        return;
+
+    /* TODO: Audio - Channel 2: Tone */
+    case 0xFF16:
+        channel_two_duty.set(byte);
+        return;
+    case 0xFF17:
+        channel_two_envelope.set(byte);
+        return;
+    case 0xFF18:
+        channel_two_freq_lo.set(byte);
+        return;
+    case 0xFF19:
+
+    {
+        bool channel_two_sound_init = channel_two_freq_hi.check_bit(7);
+        channel_two_freq_hi.set(byte);
+
+        /* Check if volume trigger should happen */
+        /* If the init sound bit was flipped to enabled, we need
+         * to adjust the period and period timer for this channel
+         */
+        if ((channel_two_freq_hi.check_bit(7) == true) &&
+            (channel_two_sound_init == false)) {
+            process_init_sound_trigger(&channel_two_envelope,
+                                       &channel_two_vol_env_period_timer);
+        }
+    }
+        /* Check if trigger should happen */
+        return;
+
+    /* TODO: Audio - Channel 3: Wave Output */
+    case 0xFF1A:
+        channel_three_switch.set(byte);
+        return;
+    case 0xFF1B:
+        channel_three_length.set(byte);
+        return;
+    case 0xFF1C:
+        channel_three_level.set(byte);
+        return;
+    case 0xFF1D:
+        channel_three_freq_lo.set(byte);
+        return;
+    case 0xFF1E:
+        channel_three_freq_hi.set(byte);
+        return;
+
+        /* TODO: Audio - Channel 4: Noise */
+    case 0xFF20:
+        channel_four_length.set(byte);
+        return;
+    case 0xFF21:
+        channel_four_envelope.set(byte);
+        return;
+    case 0xFF22:
+        channel_four_poly_ctr.set(byte);
+        return;
+    case 0xFF23:
+
+    {
+        bool channel_four_sound_init = channel_four_init.check_bit(7);
+        channel_four_init.set(byte);
+
+        /* Check if volume trigger should happen */
+        /* If the init sound bit was flipped to enabled, we need
+         * to adjust the period and period timer for this channel
+         */
+        if ((channel_four_init.check_bit(7) == true) &&
+            (channel_four_sound_init == false)) {
+            process_init_sound_trigger(&channel_four_envelope,
+                                       &channel_four_vol_env_period_timer);
+        }
+
+        /* Check if trigger should happen */
+    }
+
+        return;
+
+    /* TODO: Audio - Channel control/ON-OFF/Volume */
+    case 0xFF24:
+        channel_ctrl.set(byte);
+        return;
+
+    /* TODO: Audio - Selection of sound output terminal */
+    case 0xFF25:
+        select_terminal.set(byte);
+        return;
+
+    /* TODO: Audio - Sound on/off */
+    case 0xFF26:
+        log_unimplemented("Wrote to sound on/off address 0x%x - 0x%x",
+                          address.value(), byte);
+        sound_switch.set(byte);
+        return;
+    }
+}
+
+void Audio::handle_vol_env_ctr(void) {
+
+    /* Applies to square and noise channels */
+    /* get values for each for the channels */
+    bool do_amplify[3] = {false, false, false};
+    ByteRegister *channel_envelopes[3] = {
+        &channel_one_envelope, &channel_two_envelope, &channel_four_envelope};
+    uint8_t *envelope_period_timers[3] = {&channel_one_vol_env_period_timer,
+                                          &channel_two_vol_env_period_timer,
+                                          &channel_four_vol_env_period_timer};
+
+    /* Amplify if the envelope up/down bit is set,
+     * else attenuate. Do nothing if the resulting amplify or attenuate
+     * would cause the volume value to fall outside of the range of
+     * AUDIO_MIN_VOL - AUDIO_MAX_VOL
+     */
+    do_amplify[0] = channel_one_envelope.check_bit(3);
+    do_amplify[1] = channel_two_envelope.check_bit(3);
+    do_amplify[2] = channel_four_envelope.check_bit(3);
+
+    uint8_t channel_vol_val = 0;
+    ByteRegister *channel_envelope = nullptr;
+    uint8_t envelope_period = 0;
+    uint8_t *envelope_period_timer = nullptr;
+
+    for (auto ctr = 0; ctr < 3; ctr++) {
+
+        envelope_period = channel_envelope->value() & 0x07;
+        envelope_period_timer = envelope_period_timers[ctr];
+
+        /* Do not perform any changes to volume envelope if the period is 0
+         * for a given channel
+         */
+        if (envelope_period == 0 || envelope_period == 8) {
+            continue;
+        }
+
+        /* Do not perform any changes to the volume envelope if the period
+         * timer has not gone off after decrementing
+         */
+        *envelope_period_timer = *envelope_period_timer - 1;
+        if ((*envelope_period_timer) != 0) {
+            continue;
+        }
+
+        /* Reload period timer with period */
+        *envelope_period_timer = envelope_period;
+
+        /* Get bits 4 - 7 (the volume value) */
+        channel_vol_val = (channel_envelope->value() >> 4);
+        channel_envelope = channel_envelopes[ctr];
+
+        /* increment volume value by one if amplify true */
+        if (do_amplify[ctr]) {
+            if (channel_vol_val < AUDIO_MAX_VOL) {
+                channel_vol_val++;
+                channel_envelope->set((channel_envelope->value() & 0x0f) |
+                                      (channel_vol_val << 4));
+            }
+
+            /* decrement volume value by one if amplify false (attenuate) */
+        } else {
+            if (channel_vol_val > AUDIO_MIN_VOL) {
+                channel_vol_val--;
+                channel_envelope->set((channel_envelope->value() & 0x0f) |
+                                      (channel_vol_val << 4));
+            }
+        }
+    }
 }
 
 void Audio::handle_length_ctr(void) {
@@ -125,4 +343,48 @@ void Audio::handle_length_ctr(void) {
             }
         }
     }
+}
+
+void Audio::process_init_sound_trigger(ByteRegister *channel_envelope_reg,
+                                       uint8_t *period_timer) {
+
+    /* For envelope
+     * Load envelope period into period timer
+     */
+    uint8_t envelope_period = channel_envelope_reg->value() & 0x07;
+    *period_timer = envelope_period;
+}
+
+void Audio::process_channel_1_trigger(void) {
+    // enable channel length
+    channel_one_freq_hi.set_bit_to(6, 1);
+
+    // if length counter is 0, set to 63 (256 for wave channel)
+    auto nr_11_len_ctr = (channel_one_duty.value() & 0x3f);
+    if (nr_11_len_ctr == 0) {
+        channel_one_duty.set(channel_one_duty.value() | 0x3f);
+    }
+
+    // reload frequency timer with period
+
+    // channel volume is reloaded from NRx2
+
+    // wave channel position is 0
+
+    // square 1 sweep  does things
+
+    // if channels DAC is off, channel will then be disabled again
+}
+
+void Audio::process_channel_2_trigger(void) {
+    channel_two_freq_hi.set_bit_to(6, 1);
+}
+
+void Audio::process_channel_3_trigger(void) {
+    channel_three_freq_hi.set_bit_to(6, 1);
+}
+
+void Audio::process_channel_4_trigger(void) {
+
+    channel_four_init.set_bit_to(6, 1);
 }
