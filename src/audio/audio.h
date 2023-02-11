@@ -73,10 +73,17 @@ private:
     uint square_two_cycle_timer = 0;
     uint square_two_cycle_timer_period = 0;
 
+    /* sweep timer */
+    uint8_t channel_one_sweep_period_timer = 0;
+    bool channel_one_sweep_internal_enabled = false;
+    uint channel_one_freq_shadow = 0;
+
+    uint16_t calc_frequency(uint8_t sweep_shift);
     void handle_length_ctr(void);
     void handle_vol_env_ctr(void);
     void process_init_sound_trigger(ByteRegister *channel_envelope_reg,
                                     uint8_t *period_timer);
+    void process_sweep_trigger(void);
     void process_channel_1_trigger(void);
     void process_channel_2_trigger(void);
     void process_channel_3_trigger(void);

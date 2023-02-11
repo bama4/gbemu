@@ -204,6 +204,20 @@ void Audio::write_io_register(const Address &address, u8 byte) {
     }
 }
 
+uint16_t Audio::calc_frequency(uint8_t sweep_shift) {
+
+    auto is_freq_subtract = channel_one_sweep.check_bit(3);
+
+    /* Calculate new frequency and perform overflow check */
+    auto new_frequency = channel_one_freq_shadow >> sweep_shift;
+
+    if (is_freq_subtract) {
+        new_frequency = channel_one_freq_shadow - new_frequency;
+    } else {
+        new_frequency = channel_one_freq_shadow + new_frequency;
+    }
+}
+
 void Audio::handle_vol_env_ctr(void) {
 
     /* Applies to square and noise channels */
@@ -353,6 +367,81 @@ void Audio::process_init_sound_trigger(ByteRegister *channel_envelope_reg,
      */
     uint8_t envelope_period = channel_envelope_reg->value() & 0x07;
     *period_timer = envelope_period;
+}
+
+void Audio::process_sweep_trigger(void) {
+    uint8_t sweep_period = 0;
+    uint16_t frequency, new_frequency = 0;
+    uint8_t sweep_shift = 0;
+    bool is_freq_subtract = false;
+
+    if (channel_one_sweep_period_timer > 0) {
+
+        channel_one_sweep_period_timer--;
+
+        /* Only move forward if timer went off */
+        if (channel_one_sweep_period_timer == 0) {
+            sweep_shift = (channel_one_sweep.value() & 0x07);
+
+            /* Copy frequency into shadow register */
+            frequency = (channel_one_freq_hi.value() & 0x07);
+
+            /* Shift high bits of frequency in place */
+            frequency = frequency << 8;
+
+            /* copy frequency lower bits into place */
+            frequency |= channel_one_freq_lo.value();
+
+            /* Place frequency into shadow register */
+            channel_one_freq_shadow = frequency;
+
+            /* Get sweep period (bits 6 - 4) */
+            sweep_period = (channel_one_sweep.value() & 0x70) >> 4;
+            channel_one_sweep_period_timer =
+                (sweep_period == 0) ? 8 : sweep_period;
+
+            /* Set sweep enable flag if either the sweep period or shift are
+             * non-zero
+             */
+            channel_one_sweep_internal_enabled =
+                ((sweep_period != 0) || (sweep_shift != 0)) ? true : false;
+
+            /* check if we need to calculate a new frequency */
+            if ((channel_one_sweep_internal_enabled == true) &&
+                sweep_period != 0) {
+                new_frequency = calc_frequency(sweep_shift);
+
+                /* Overflow check */
+                if ((new_frequency <= 2047) && (sweep_shift != 0)) {
+                    /* Update shadow frequency and channel 1 frequency with this
+                     * new value */
+                    channel_one_freq_shadow = new_frequency;
+
+                    /* Set lower 8 frequency bits */
+                    channel_one_freq_lo.set(new_frequency & 0xff);
+
+                    /* Set higher 3 frequency bits */
+                    /* Clear high bits first (clear first 3 bits) */
+                    channel_one_freq_hi.set(channel_one_freq_hi.value() & 0xf8);
+
+                    /* Set new high bits */
+                    channel_one_freq_hi.set(channel_one_freq_hi.value() |
+                                            ((new_frequency & 0x700) >> 8));
+
+                    /* Disable channel sweep if new freq overflow */
+                } else if (new_frequency > 2047) {
+                    channel_one_sweep_internal_enabled = false;
+                }
+
+                /* Calculate frequency again and perform overflow check */
+                new_frequency = calc_frequency(sweep_shift);
+
+                if (new_frequency > 2047) {
+                    channel_one_sweep_internal_enabled = false;
+                }
+            }
+        }
+    }
 }
 
 void Audio::process_channel_1_trigger(void) {
